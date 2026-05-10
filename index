@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tuner">
+<meta name="theme-color" content="#f3efe5">
+<meta name="format-detection" content="telephone=no">
+<title>Tuner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f3efe5;
+    --panel: #fdfaf2;
+    --edge: #e6dfcd;
+    --ink: #1f1c17;
+    --dim: #6e6856;
+    --faint: #c1baa6;
+    --amber: #a8761c;
+    --green: #3a8030;
+    --red: #b04545;
+    --sys: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter',
+           system-ui, -apple-system-ui, sans-serif;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sys);
+    min-height: 100vh;
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    -webkit-user-select: none;
+    user-select: none;
+    overscroll-behavior: none;
+    overflow: hidden;
+  }
+  .tuner {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding:
+      max(16px, env(safe-area-inset-top))
+      max(20px, env(safe-area-inset-right))
+      max(20px, env(safe-area-inset-bottom))
+      max(20px, env(safe-area-inset-left));
+    max-width: 540px;
+    margin: 0 auto;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dim);
+    padding: 8px 4px 0;
+    flex-shrink: 0;
+  }
+  .header .brand { color: var(--amber); }
+  .display {
+    text-align: center;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    min-height: 0;
+  }
+  .note-stack {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    line-height: 1;
+  }
+  .note {
+    font-family: 'Fraunces', 'Times New Roman', serif;
+    font-variation-settings: 'opsz' 144, 'wght' 300;
+    font-size: clamp(140px, 38vw, 220px);
+    color: var(--ink);
+    letter-spacing: -0.04em;
+    transition: color 0.25s ease;
+  }
+  .note.in-tune { color: var(--green); }
+  .accidental {
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 80, 'wght' 300;
+    font-size: clamp(56px, 15vw, 88px);
+    color: var(--dim);
+    margin-left: -4px;
+  }
+  .octave {
+    font-family: var(--sys);
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--dim);
+    margin-left: 8px;
+  }
+  .display.idle .note,
+  .display.idle .accidental,
+  .display.idle .octave {
+    color: var(--faint);
+  }
+  .meter {
+    margin: 0 auto 10px;
+    position: relative;
+    height: 48px;
+    flex-shrink: 0;
+  }
+  .scale-line {
+    position: absolute;
+    top: 50%; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent 0%,
+      var(--faint) 8%,
+      var(--faint) 92%,
+      transparent 100%
+    );
+  }
+  .ticks {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .tick { width: 1px; background: var(--faint); }
+  .tick.minor { height: 6px; }
+  .tick.major { height: 14px; background: var(--dim); }
+  .tick.center { height: 22px; width: 1.5px; background: var(--amber); }
+  .needle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 3px rgba(168, 118, 28, 0.15);
+    transition:
+      left 0.14s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      background-color 0.25s ease,
+      box-shadow 0.25s ease,
+      opacity 0.4s ease;
+  }
+  .needle.in-tune {
+    background: var(--green);
+    box-shadow: 0 0 0 3px rgba(58, 128, 48, 0.18);
+  }
+  .needle.idle { opacity: 0; }
+  .scale-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    color: var(--faint);
+    text-transform: uppercase;
+    padding: 0 2px;
+    margin-bottom: 22px;
+    flex-shrink: 0;
+  }
+  .readouts {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  .readouts .cents {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .readouts .cents.in-tune { color: var(--green); }
+  .readouts .freq {
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .strings {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 22px;
+    flex-shrink: 0;
+  }
+  .string {
+    text-align: center;
+    padding: 14px 4px 12px;
+    border: 1px solid var(--edge);
+    border-radius: 12px;
+    font-family: 'Fraunces', serif;
+    font-variation-settings: 'opsz' 36, 'wght' 400;
+    font-size: 20px;
+    color: var(--dim);
+    transition: all 0.25s ease;
+    background: var(--panel);
+  }
+  .string .oct {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    vertical-align: super;
+    margin-left: 1px;
+    color: var(--faint);
+    transition: color 0.25s ease;
+  }
+  .string.active {
+    background: rgba(168, 118, 28, 0.07);
+    border-color: rgba(168, 118, 28, 0.4);
+    color: var(--amber);
+  }
+  .string.active .oct { color: rgba(168, 118, 28, 0.7); }
+  .controls {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  button.toggle {
+    background: var(--ink);
+    border: none;
+    color: var(--bg);
+    padding: 18px 24px;
+    font-family: var(--sys);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    touch-action: manipulation;
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 56px;
+    width: 100%;
+  }
+  button.toggle:active { transform: scale(0.98); opacity: 0.9; }
+  button.toggle.on {
+    background: var(--amber);
+    color: #fff;
+  }
+  button.toggle.on:hover { background: var(--amber); }
+  .hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--dim);
+    letter-spacing: 0.02em;
+    text-align: center;
+    min-height: 16px;
+  }
+  .hint.error { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="tuner">
+  <div class="header">
+    <span class="brand">⏚ Tuner</span>
+    <span>A · 440 Hz</span>
+  </div>
+
+  <div class="display idle" id="display">
+    <div class="note-stack">
+      <span class="note" id="note">—</span>
+      <span class="accidental" id="accidental"></span>
+      <span class="octave" id="octave"></span>
+    </div>
+  </div>
+
+  <div class="meter">
+    <div class="scale-line"></div>
+    <div class="ticks" id="ticks"></div>
+    <div class="needle idle" id="needle"></div>
+  </div>
+  <div class="scale-labels">
+    <span>−50¢</span><span>−25</span><span>0</span><span>+25</span><span>+50¢</span>
+  </div>
+
+  <div class="readouts">
+    <span class="cents" id="cents">— ¢</span>
+    <span class="freq" id="freq">— Hz</span>
+  </div>
+
+  <div class="strings" id="strings"></div>
+
+  <div class="controls">
+    <button class="toggle" id="toggle">Start</button>
+    <div class="hint" id="hint">Tap to allow microphone access</div>
+  </div>
+</div>
+
+<script>
+  // === Tuning data ===
+  const STRINGS = [
+    { name: 'E', octave: 2 },
+    { name: 'A', octave: 2 },
+    { name: 'D', octave: 3 },
+    { name: 'G', octave: 3 },
+    { name: 'B', octave: 3 },
+    { name: 'E', octave: 4 },
+  ];
+  const NOTE_NAMES = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
+  const NOTE_ACCIDENTALS = ['', '♯', '', '♯', '', '', '♯', '', '♯', '', '♯', ''];
+  const A4 = 440;
+
+  // === Tuning behavior knobs ===
+  const IN_TUNE_CENTS = 5;        // ±cents window for "in tune" feedback
+  const PITCH_BUFFER_SIZE = 6;    // median filter window
+  const NOTE_HYSTERESIS = 65;     // cents from locked note before switching
+  const CLARITY_MIN = 0.5;        // normalized autocorrelation threshold
+  const RMS_GATE = 0.012;         // input level floor
+  const CENTS_EMA = 0.30;         // needle smoothing (lower = smoother, slower)
+  const IDLE_TIMEOUT_MS = 450;    // signal-lost timeout
+
+  // === Build static UI ===
+  const ticksEl = document.getElementById('ticks');
+  for (let i = -50; i <= 50; i += 5) {
+    const t = document.createElement('div');
+    let cls = 'tick';
+    if (i === 0) cls += ' center';
+    else if (i % 25 === 0) cls += ' major';
+    else cls += ' minor';
+    t.className = cls;
+    ticksEl.appendChild(t);
+  }
+  const stringsEl = document.getElementById('strings');
+  STRINGS.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'string';
+    el.innerHTML = `${s.name}<span class="oct">${s.octave}</span>`;
+    stringsEl.appendChild(el);
+  });
+  const stringEls = stringsEl.querySelectorAll('.string');
+
+  // MIDI numbers for each guitar string (E2=40, A2=45, D3=50, G3=55, B3=59, E4=64)
+  const STRING_MIDIS = STRINGS.map(s => {
+    const semitones = NOTE_NAMES.indexOf(s.name) +
+      (NOTE_ACCIDENTALS[NOTE_NAMES.indexOf(s.name)] === '♯' ? 0 : 0);
+    // Use direct table for clarity:
+    const map = { 'E2': 40, 'A2': 45, 'D3': 50, 'G3': 55, 'B3': 59, 'E4': 64 };
+    return map[`${s.name}${s.octave}`];
+  });
+
+  // === DOM refs ===
+  const noteEl = document.getElementById('note');
+  const accEl = document.getElementById('accidental');
+  const octEl = document.getElementById('octave');
+  const centsEl = document.getElementById('cents');
+  const freqEl = document.getElementById('freq');
+  const needleEl = document.getElementById('needle');
+  const displayEl = document.getElementById('display');
+  const toggleBtn = document.getElementById('toggle');
+  const hintEl = document.getElementById('hint');
+
+  // === Audio + state ===
+  let audioCtx = null, analyser = null, mediaStream = null, buffer = null;
+  let running = false, rafId = null;
+  const pitchBuffer = [];
+  let lockedMidi = null;        // current note we're committed to (hysteresis)
+  let smoothedCents = 0;
+  let lastValidTime = 0;
+
+  // === Pitch detection: bounded autocorrelation + parabolic interp ===
+  function autoCorrelate(buf, sampleRate) {
+    const SIZE = buf.length;
+    let rms = 0;
+    for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+    rms = Math.sqrt(rms / SIZE);
+    if (rms < RMS_GATE) return { freq: -1, clarity: 0 };
+
+    // Search range: 65 Hz (below low E) to 1200 Hz (well above high E)
+    const minLag = Math.max(2, Math.floor(sampleRate / 1200));
+    const maxLag = Math.min(SIZE - 2, Math.floor(sampleRate / 65));
+
+    // Total energy for normalization
+    let acf0 = 0;
+    for (let i = 0; i < SIZE; i++) acf0 += buf[i] * buf[i];
+    if (acf0 < 1e-9) return { freq: -1, clarity: 0 };
+
+    // Compute autocorrelation across the bounded lag range
+    const c = new Float32Array(maxLag + 2);
+    for (let lag = minLag - 1; lag <= maxLag + 1; lag++) {
+      let sum = 0;
+      const N = SIZE - lag;
+      for (let i = 0; i < N; i++) sum += buf[i] * buf[i + lag];
+      c[lag] = sum;
+    }
+
+    // Walk past the initial decline from lag 0 (skips the trivial peak at 0)
+    let lag = minLag;
+    while (lag < maxLag && c[lag] > c[lag + 1]) lag++;
+
+    // Find the FIRST local maximum — this is the fundamental period.
+    // (Picking the global max would frequently land on harmonics → octave errors.)
+    let bestLag = -1, bestVal = -Infinity;
+    for (; lag < maxLag; lag++) {
+      if (c[lag] > c[lag - 1] && c[lag] >= c[lag + 1]) {
+        bestLag = lag;
+        bestVal = c[lag];
+        break;
+      }
+    }
+
+    if (bestLag < minLag) return { freq: -1, clarity: 0 };
+
+    const clarity = bestVal / acf0;
+    if (clarity < CLARITY_MIN) return { freq: -1, clarity };
+
+    // Parabolic interpolation around the peak for sub-sample precision
+    const x1 = c[bestLag - 1], x2 = c[bestLag], x3 = c[bestLag + 1];
+    const a = (x1 + x3 - 2 * x2) / 2;
+    const b = (x3 - x1) / 2;
+    let shift = 0;
+    if (a !== 0) {
+      shift = -b / (2 * a);
+      if (shift > 0.5) shift = 0.5;
+      else if (shift < -0.5) shift = -0.5;
+    }
+
+    return { freq: sampleRate / (bestLag + shift), clarity };
+  }
+
+  // === Note math with hysteresis ===
+  function detectNote(freq) {
+    const noteNum = 12 * Math.log2(freq / A4) + 69; // fractional MIDI
+    let midi;
+    if (lockedMidi !== null) {
+      const centsFromLocked = (noteNum - lockedMidi) * 100;
+      if (Math.abs(centsFromLocked) < NOTE_HYSTERESIS) {
+        midi = lockedMidi; // stay locked — this kills boundary jitter
+      } else {
+        midi = Math.round(noteNum);
+        lockedMidi = midi;
+      }
+    } else {
+      midi = Math.round(noteNum);
+      lockedMidi = midi;
+    }
+    const cents = (noteNum - midi) * 100;
+    const idx = ((midi % 12) + 12) % 12;
+    return {
+      midi,
+      cents,
+      name: NOTE_NAMES[idx],
+      acc: NOTE_ACCIDENTALS[idx],
+      octave: Math.floor(midi / 12) - 1,
+      freq,
+    };
+  }
+
+  function nearestStringIdx(midi) {
+    let best = -1, dist = Infinity;
+    STRING_MIDIS.forEach((m, i) => {
+      const d = Math.abs(midi - m);
+      if (d < dist) { dist = d; best = i; }
+    });
+    return dist <= 3 ? best : -1; // only highlight if within 3 semitones
+  }
+
+  // === Render ===
+  function render(note, cents) {
+    displayEl.classList.remove('idle');
+    needleEl.classList.remove('idle');
+
+    noteEl.textContent = note.name;
+    accEl.textContent = note.acc;
+    octEl.textContent = note.octave;
+
+    const inTune = Math.abs(cents) < IN_TUNE_CENTS;
+    noteEl.classList.toggle('in-tune', inTune);
+    needleEl.classList.toggle('in-tune', inTune);
+    centsEl.classList.toggle('in-tune', inTune);
+
+    const sign = cents > 0.5 ? '+' : (cents < -0.5 ? '−' : '±');
+    const absC = Math.abs(cents);
+    centsEl.textContent = `${sign}${absC.toFixed(0).padStart(2, '0')} ¢`;
+    freqEl.textContent = `${note.freq.toFixed(1)} Hz`;
+
+    const clamped = Math.max(-50, Math.min(50, cents));
+    needleEl.style.left = `${50 + clamped}%`;
+
+    const sIdx = nearestStringIdx(note.midi);
+    stringEls.forEach((e, i) => e.classList.toggle('active', i === sIdx));
+  }
+
+  function goIdle() {
+    displayEl.classList.add('idle');
+    needleEl.classList.add('idle');
+    noteEl.textContent = '—';
+    accEl.textContent = '';
+    octEl.textContent = '';
+    centsEl.textContent = '— ¢';
+    freqEl.textContent = '— Hz';
+    centsEl.classList.remove('in-tune');
+    noteEl.classList.remove('in-tune');
+    needleEl.classList.remove('in-tune');
+    stringEls.forEach(e => e.classList.remove('active'));
+    lockedMidi = null;
+    pitchBuffer.length = 0;
+  }
+
+  // === Main loop ===
+  function tick() {
+    if (!running) return;
+    analyser.getFloatTimeDomainData(buffer);
+    const { freq, clarity } = autoCorrelate(buffer, audioCtx.sampleRate);
+
+    const now = performance.now();
+
+    if (freq > 0 && clarity >= CLARITY_MIN) {
+      pitchBuffer.push(freq);
+      if (pitchBuffer.length > PITCH_BUFFER_SIZE) pitchBuffer.shift();
+
+      // Median across recent detections — rejects spurious harmonics/transients
+      const sorted = [...pitchBuffer].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+
+      const note = detectNote(median);
+      // Smooth the cents readout so the needle has motion, not jitter
+      if (lastValidTime === 0 || now - lastValidTime > IDLE_TIMEOUT_MS) {
+        smoothedCents = note.cents; // first detection — snap
+      } else {
+        smoothedCents = smoothedCents * (1 - CENTS_EMA) + note.cents * CENTS_EMA;
+      }
+      lastValidTime = now;
+      render(note, smoothedCents);
+    } else if (now - lastValidTime > IDLE_TIMEOUT_MS) {
+      goIdle();
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // === Mic control ===
+  async function start() {
+    try {
+      // iOS Safari requires AudioContext to be created AND resumed inside the
+      // user gesture — before any `await`. If we wait for getUserMedia first,
+      // we lose the gesture and the context stays suspended forever.
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) throw new Error('Web Audio not supported');
+      audioCtx = new Ctx();
+      // Kick the resume promise immediately while the gesture is still hot.
+      const resumePromise = audioCtx.resume();
+
+      // Critically: turn OFF the browser's audio processing. AGC + noise suppression
+      // mangle pitch detection — they're tuned for speech, not pitched instruments.
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        }
+      });
+      await resumePromise;
+
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 4096; // ~93ms at 44.1kHz — enough cycles for low E
+      const source = audioCtx.createMediaStreamSource(mediaStream);
+      source.connect(analyser);
+      buffer = new Float32Array(analyser.fftSize);
+      running = true;
+      lastValidTime = 0;
+      toggleBtn.textContent = 'Stop';
+      toggleBtn.classList.add('on');
+      hintEl.classList.remove('error');
+      hintEl.textContent = 'Pluck a string and let it ring';
+      tick();
+    } catch (err) {
+      hintEl.classList.add('error');
+      if (err.name === 'NotAllowedError') {
+        hintEl.textContent = 'Microphone access denied';
+      } else if (!window.isSecureContext) {
+        hintEl.textContent = 'Requires HTTPS for mic access';
+      } else {
+        hintEl.textContent = 'Microphone unavailable';
+      }
+    }
+  }
+
+  function stop() {
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+    if (audioCtx) audioCtx.close();
+    audioCtx = null; analyser = null; mediaStream = null; buffer = null;
+    toggleBtn.textContent = 'Start';
+    toggleBtn.classList.remove('on');
+    hintEl.classList.remove('error');
+    hintEl.textContent = 'Tap to allow microphone access';
+    goIdle();
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    if (running) stop(); else start();
+  });
+
+  // iOS suspends the AudioContext when the page goes to background.
+  // Resume it when we come back so the tuner picks up where it left off.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && running && audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  });
+</script>
+
+</body>
+</html>
